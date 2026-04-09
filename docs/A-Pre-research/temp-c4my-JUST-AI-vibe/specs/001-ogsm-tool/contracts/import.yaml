@@ -1,0 +1,203 @@
+openapi: "3.1.0"
+info:
+  title: Import API
+  version: "1.0"
+  description: 数据导入 — Excel/CSV 上传、质量检查、确认写入
+
+paths:
+
+  /api/v1/import/upload:
+    post:
+      summary: 上传文件并执行数据质量检查（不写入数据库）
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, category]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: "Excel (.xlsx) 或 CSV 文件，最大 5MB"
+                category:
+                  type: string
+                  enum: [sales, inventory, cost, staff, customer]
+                store_id:
+                  type: string
+                field_mapping:
+                  type: string
+                  description: "JSON 字符串，源字段名 → 标准字段名映射"
+                  example: '{"日期":"record_date","金额":"amount"}'
+      responses:
+        "200":
+          description: 质量检查完成，返回预览数据和问题列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadPreview"
+        "400":
+          description: 文件格式错误或超过大小限制
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportError"
+
+  /api/v1/import/confirm:
+    post:
+      summary: 确认写入（异步任务，返回 task_id）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportConfirm"
+      responses:
+        "202":
+          description: 导入任务已提交
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportTask"
+
+  /api/v1/import/tasks/{task_id}:
+    get:
+      summary: 查询导入任务状态
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportTaskStatus"
+
+components:
+  schemas:
+
+    UploadPreview:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          description: "临时上传 ID，用于后续 confirm 请求"
+        file_name:
+          type: string
+        file_size_bytes:
+          type: integer
+        category:
+          type: string
+        total_rows:
+          type: integer
+        parsed_count:
+          type: integer
+        skipped_count:
+          type: integer
+        quality_score:
+          type: number
+          description: "0-100，有 critical 问题时为 0"
+        has_critical_issues:
+          type: boolean
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationIssue"
+        preview_rows:
+          type: array
+          description: "前 5 行预览数据"
+          items:
+            type: object
+        can_confirm:
+          type: boolean
+          description: "false = 有 critical 问题，不允许确认写入"
+
+    ValidationIssue:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum: [critical, warning, info]
+        rule:
+          type: string
+          example: "date_format"
+        message:
+          type: string
+          example: "第 5 行 record_date 格式错误，期望 YYYY-MM-DD"
+        row_index:
+          type: integer
+          nullable: true
+        field_name:
+          type: string
+          nullable: true
+
+    ImportConfirm:
+      type: object
+      required: [upload_id]
+      properties:
+        upload_id:
+          type: string
+        import_mode:
+          type: string
+          enum: [append, upsert, replace_date_range]
+          default: append
+          description: |
+            append: 追加写入
+            upsert: 按主键更新或插入
+            replace_date_range: 替换指定日期范围内的数据
+
+    ImportTask:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, processing, done, failed]
+        created_at:
+          type: string
+          format: date-time
+        poll_url:
+          type: string
+          description: "轮询状态的 URL"
+
+    ImportTaskStatus:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, processing, done, failed]
+        progress_pct:
+          type: integer
+          description: "0-100"
+        imported_count:
+          type: integer
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        ogsm_refresh_triggered:
+          type: boolean
+          description: "导入完成后是否已触发 G 目标进度刷新"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ImportError:
+      type: object
+      properties:
+        error_code:
+          type: string
+          example: "FILE_TOO_LARGE"
+        message:
+          type: string
+        details:
+          type: object
+          nullable: true

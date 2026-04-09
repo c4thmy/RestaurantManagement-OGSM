@@ -1,0 +1,438 @@
+openapi: "3.1.0"
+info:
+  title: Analysis API
+  version: "1.0"
+  description: 四步法分析工作台 — 分析会话管理与行动生成
+
+paths:
+
+  /api/v1/analysis/sessions:
+    get:
+      summary: 列出分析会话（含草稿）
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [draft, step1_complete, step2_complete, step3_complete, actions_generated]
+        - name: goal_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnalysisSession"
+
+    post:
+      summary: 创建分析会话（三种触发入口）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalysisSessionCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisSessionWithStep1"
+
+  /api/v1/analysis/sessions/{id}:
+    get:
+      summary: 获取分析会话详情
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisSession"
+
+  /api/v1/analysis/sessions/{id}/step/1:
+    put:
+      summary: 完成 Step 1 — 一比目标（选择要分析的异常指标）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Step1Input"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step1Result"
+
+  /api/v1/analysis/sessions/{id}/step/2:
+    put:
+      summary: 完成 Step 2 — 二拆数据（选择拆解维度）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Step2Input"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step2Result"
+
+  /api/v1/analysis/sessions/{id}/step/3:
+    put:
+      summary: 完成 Step 3 — 三定归因（确认主要归因）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Step3Input"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step3Result"
+
+  /api/v1/analysis/sessions/{id}/generate-actions:
+    post:
+      summary: Step 4 — 四做决策，生成 M 行动清单
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Step4Input"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step4Result"
+
+components:
+  schemas:
+
+    AnalysisSessionCreate:
+      type: object
+      required: [triggered_by]
+      properties:
+        triggered_by:
+          type: string
+          description: "'goal:{uuid}' | 'alert:{uuid}' | 'manual'"
+          example: "goal:550e8400-e29b-41d4-a716-446655440000"
+        goal_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    AnalysisSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        triggered_by:
+          type: string
+        goal_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [draft, step1_complete, step2_complete, step3_complete, actions_generated]
+        step1_data:
+          type: object
+          nullable: true
+        step2_data:
+          type: object
+          nullable: true
+        step3_data:
+          type: object
+          nullable: true
+        step4_data:
+          type: object
+          nullable: true
+        actions_generated:
+          type: array
+          items:
+            type: string
+            format: uuid
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AnalysisSessionWithStep1:
+      allOf:
+        - $ref: "#/components/schemas/AnalysisSession"
+        - type: object
+          properties:
+            step1_preloaded:
+              $ref: "#/components/schemas/Step1Result"
+
+    # Step 1 — 一比目标
+    Step1Input:
+      type: object
+      required: [selected_metric]
+      properties:
+        selected_metric:
+          type: string
+          description: "用户选择要深入分析的异常指标 kpi_metric"
+          example: "net_profit_rate"
+        comparison_period:
+          type: string
+          enum: [budget, yoy, mom]
+          default: budget
+
+    Step1Result:
+      type: object
+      properties:
+        goal_title:
+          type: string
+        kpi_metric:
+          type: string
+        target_value:
+          type: number
+        actual_value:
+          type: number
+        gap:
+          type: number
+          description: "actual - target"
+        gap_rate:
+          type: number
+          description: "(actual - target) / target"
+        is_alert:
+          type: boolean
+        comparisons:
+          type: object
+          properties:
+            budget:
+              $ref: "#/components/schemas/ComparisonItem"
+            yoy:
+              $ref: "#/components/schemas/ComparisonItem"
+            mom:
+              $ref: "#/components/schemas/ComparisonItem"
+        recommended_dimensions:
+          type: array
+          items:
+            type: string
+          description: "推荐的拆解维度，如 ['channel', 'shift']"
+
+    ComparisonItem:
+      type: object
+      properties:
+        base_value:
+          type: number
+        current_value:
+          type: number
+        delta:
+          type: number
+        delta_rate:
+          type: number
+        is_alert:
+          type: boolean
+
+    # Step 2 — 二拆数据
+    Step2Input:
+      type: object
+      required: [dimension]
+      properties:
+        dimension:
+          type: string
+          enum: [channel, shift, store, customer_type]
+          description: "选择的拆解维度"
+
+    Step2Result:
+      type: object
+      properties:
+        dimension:
+          type: string
+        breakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/BreakdownItem"
+        main_gap_source:
+          type: string
+          description: "主要缺口来源（贡献度最大的负向维度值）"
+        main_gap_contribution:
+          type: number
+          description: "主要缺口贡献度（占总缺口的比例）"
+
+    BreakdownItem:
+      type: object
+      properties:
+        dimension_value:
+          type: string
+          example: "外卖"
+        current_value:
+          type: number
+        base_value:
+          type: number
+        delta:
+          type: number
+        contribution_rate:
+          type: number
+          description: "对总缺口的贡献比例"
+        is_main_gap:
+          type: boolean
+
+    # Step 3 — 三定归因
+    Step3Input:
+      type: object
+      required: [confirmed_attribution]
+      properties:
+        confirmed_attribution:
+          type: string
+          enum: [customer_unit_price, customer_traffic, mixed]
+          description: "用户确认的主要归因类型"
+        attribution_note:
+          type: string
+          nullable: true
+          description: "用户补充的归因说明"
+
+    Step3Result:
+      type: object
+      properties:
+        customer_unit_price_factor:
+          type: number
+          description: "客单因素 = (本期客单 - 上期客单) × 上期客流"
+        customer_traffic_factor:
+          type: number
+          description: "客流因素 = (本期客流 - 上期客流) × 本期客单"
+        total_gap:
+          type: number
+        dominant_factor:
+          type: string
+          enum: [customer_unit_price, customer_traffic, mixed]
+        confirmed_attribution:
+          type: string
+        recommended_actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionTemplate"
+          description: "基于归因类型推荐的行动模板"
+
+    ActionTemplate:
+      type: object
+      properties:
+        template_id:
+          type: string
+        title:
+          type: string
+        what:
+          type: string
+        expected_result:
+          type: string
+        attribution_type:
+          type: string
+
+    # Step 4 — 四做决策
+    Step4Input:
+      type: object
+      required: [actions]
+      properties:
+        actions:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [strategy_id, title, what, who, deadline, expected_result]
+            properties:
+              strategy_id:
+                type: string
+                format: uuid
+              title:
+                type: string
+              what:
+                type: string
+              who:
+                type: string
+                format: uuid
+              deadline:
+                type: string
+                format: date
+              expected_result:
+                type: string
+              priority:
+                type: string
+                enum: [high, medium, low]
+                default: medium
+
+    Step4Result:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        actions_created:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              title:
+                type: string
+              who:
+                type: string
+                format: uuid
+              deadline:
+                type: string
+                format: date
+              status:
+                type: string
+        ogsm_updated:
+          type: boolean
+          description: "行动是否已写入 OGSM 一张表"

@@ -1,0 +1,378 @@
+openapi: "3.1.0"
+info:
+  title: Dashboard API
+  version: "1.0"
+  description: BI 数据看板 — 8 个核心指标卡片（含 G 目标对比）、收入分析、成本费用分析
+
+paths:
+
+  /api/v1/dashboard/overview:
+    get:
+      summary: 经营总览 — 8 个核心指标卡片（含 G 目标对比与预警）
+      parameters:
+        - name: store_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardOverview"
+
+  /api/v1/revenue/breakdown:
+    get:
+      summary: 收入拆解 — 渠道 / 时段维度
+      parameters:
+        - name: store_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: dimension
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [channel, shift]
+        - name: date_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: compare_period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [yoy, mom, budget]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevenueBreakdown"
+
+  /api/v1/revenue/factor-decomposition:
+    get:
+      summary: 收入因素拆解 — 客单因素 + 客流因素
+      parameters:
+        - name: store_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: current_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: current_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: base_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: base_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactorDecomposition"
+
+  /api/v1/cost/overview:
+    get:
+      summary: 成本总览 — 三线对比（标准/理论/实际）+ 损益率
+      parameters:
+        - name: store_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostOverview"
+
+  /api/v1/cost/expenses:
+    get:
+      summary: 费用率结构 — 各项费用率及预警
+      parameters:
+        - name: store_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseStructure"
+
+components:
+  schemas:
+
+    DashboardOverview:
+      type: object
+      properties:
+        store_id:
+          type: string
+          nullable: true
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricCard"
+        alert_count:
+          type: integer
+          description: "标红指标数量"
+        last_updated_at:
+          type: string
+          format: date-time
+
+    MetricCard:
+      type: object
+      properties:
+        kpi_metric:
+          type: string
+          example: "net_profit_rate"
+        label:
+          type: string
+          example: "净利润率"
+        actual_value:
+          type: number
+          nullable: true
+        target_value:
+          type: number
+          nullable: true
+          description: "来自关联 G 目标，null = 未设置目标"
+        gap:
+          type: number
+          nullable: true
+          description: "actual - target"
+        gap_rate:
+          type: number
+          nullable: true
+        unit:
+          type: string
+          example: "%"
+        is_alert:
+          type: boolean
+        alert_reason:
+          type: string
+          nullable: true
+          description: "预警原因说明"
+        goal_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "关联的 G 目标 ID，用于跳转"
+        trend:
+          type: string
+          enum: [up, down, flat]
+          nullable: true
+
+    RevenueBreakdown:
+      type: object
+      properties:
+        dimension:
+          type: string
+          enum: [channel, shift]
+        total_revenue:
+          type: number
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              dimension_value:
+                type: string
+                example: "外卖"
+              revenue:
+                type: number
+              revenue_rate:
+                type: number
+                description: "占总收入比例"
+              compare_value:
+                type: number
+                nullable: true
+              compare_delta:
+                type: number
+                nullable: true
+              compare_delta_rate:
+                type: number
+                nullable: true
+              is_main_gap:
+                type: boolean
+
+    FactorDecomposition:
+      type: object
+      properties:
+        current_period:
+          type: object
+          properties:
+            revenue:
+              type: number
+            avg_order_value:
+              type: number
+              description: "客单价"
+            customer_count:
+              type: number
+              description: "客流量"
+        base_period:
+          type: object
+          properties:
+            revenue:
+              type: number
+            avg_order_value:
+              type: number
+            customer_count:
+              type: number
+        total_gap:
+          type: number
+          description: "current_revenue - base_revenue"
+        customer_unit_price_factor:
+          type: number
+          description: "(本期客单 - 上期客单) × 上期客流"
+        customer_traffic_factor:
+          type: number
+          description: "(本期客流 - 上期客流) × 本期客单"
+        dominant_factor:
+          type: string
+          enum: [customer_unit_price, customer_traffic, mixed]
+        recommended_action_type:
+          type: string
+          enum: [marketing, menu_optimization, mixed]
+          description: "基于主导因素的行动建议方向"
+
+    CostOverview:
+      type: object
+      properties:
+        total_revenue:
+          type: number
+        standard_cost:
+          type: number
+          description: "标准成本"
+        theoretical_cost:
+          type: number
+          description: "理论成本"
+        actual_cost:
+          type: number
+          description: "实际成本"
+        cost_variance_rate:
+          type: number
+          description: "原材料损益率 = (理论成本 - 实际成本) / 理论成本"
+        food_cost_rate:
+          type: number
+          description: "食材成本率 = 实际成本 / 总收入"
+        is_alert:
+          type: boolean
+        alert_items:
+          type: array
+          items:
+            type: string
+
+    ExpenseStructure:
+      type: object
+      properties:
+        total_revenue:
+          type: number
+        net_profit_rate:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseItem"
+
+    ExpenseItem:
+      type: object
+      properties:
+        expense_type:
+          type: string
+          example: "rent"
+        label:
+          type: string
+          example: "租金"
+        amount:
+          type: number
+        rate:
+          type: number
+          description: "费用率 = amount / total_revenue"
+        threshold:
+          type: number
+          description: "预警阈值"
+        is_alert:
+          type: boolean
+        alert_direction:
+          type: string
+          enum: [above, below]
+          description: "above = 超过阈值标红，below = 低于阈值标红"

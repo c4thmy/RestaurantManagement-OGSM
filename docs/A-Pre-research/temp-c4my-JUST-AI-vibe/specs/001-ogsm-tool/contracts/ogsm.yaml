@@ -1,0 +1,555 @@
+openapi: "3.1.0"
+info:
+  title: OGSM API
+  version: "1.0"
+  description: OGSM 一张表核心 CRUD — O/G/S/M 四要素管理
+
+paths:
+
+  /api/v1/ogsm/summary:
+    get:
+      summary: 获取 OGSM 一张表汇总数据（主界面）
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "2026-Q1"
+        - name: level
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [corporate, brand, store]
+        - name: store_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OGSM 一张表汇总
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgsmSummary"
+
+  /api/v1/ogsm/objectives:
+    get:
+      summary: 列出目的
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OgsmObjective"
+    post:
+      summary: 创建目的
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OgsmObjectiveCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgsmObjective"
+
+  /api/v1/ogsm/objectives/{id}:
+    put:
+      summary: 更新目的
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OgsmObjectiveCreate"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgsmObjective"
+    delete:
+      summary: 删除目的
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: 已删除
+
+  /api/v1/ogsm/goals:
+    get:
+      summary: 列出 G 目标（含进度）
+      parameters:
+        - name: objective_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OgsmGoal"
+    post:
+      summary: 创建 G 目标
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OgsmGoalCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgsmGoal"
+
+  /api/v1/ogsm/goals/{id}:
+    put:
+      summary: 更新 G 目标
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OgsmGoalUpdate"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgsmGoal"
+
+  /api/v1/ogsm/goals/{id}/override:
+    post:
+      summary: 手工覆盖 G 目标当前值
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_value]
+              properties:
+                current_value:
+                  type: number
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgsmGoal"
+
+  /api/v1/ogsm/strategies:
+    get:
+      summary: 列出策略
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OgsmStrategy"
+    post:
+      summary: 创建策略
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OgsmStrategyCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgsmStrategy"
+
+  /api/v1/ogsm/actions:
+    get:
+      summary: 列出行动清单（店长角色自动过滤为自己的行动）
+      parameters:
+        - name: strategy_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, in_progress, done, overdue]
+        - name: who
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OgsmAction"
+    post:
+      summary: 手工创建行动
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OgsmActionCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgsmAction"
+
+  /api/v1/ogsm/actions/{id}/complete:
+    post:
+      summary: 标记行动完成（触发 G 进度重算）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actual_result]
+              properties:
+                actual_result:
+                  type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgsmAction"
+
+components:
+  schemas:
+
+    OgsmSummary:
+      type: object
+      properties:
+        objectives:
+          type: array
+          items:
+            $ref: "#/components/schemas/OgsmObjective"
+        goals:
+          type: array
+          items:
+            $ref: "#/components/schemas/OgsmGoal"
+        strategies:
+          type: array
+          items:
+            $ref: "#/components/schemas/OgsmStrategy"
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/OgsmAction"
+        alert_count:
+          type: integer
+          description: 标红 G 目标数量
+        overdue_action_count:
+          type: integer
+
+    OgsmObjective:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        period:
+          type: string
+        level:
+          type: string
+          enum: [corporate, brand, store]
+        store_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    OgsmObjectiveCreate:
+      type: object
+      required: [title, period, level]
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        period:
+          type: string
+        level:
+          type: string
+          enum: [corporate, brand, store]
+        store_id:
+          type: string
+
+    OgsmGoal:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        objective_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        kpi_metric:
+          type: string
+        target_value:
+          type: number
+        baseline_value:
+          type: number
+          nullable: true
+        current_value:
+          type: number
+          nullable: true
+          description: "null = 暂无数据"
+        unit:
+          type: string
+        progress:
+          type: number
+          nullable: true
+          description: "current_value / target_value，null = 暂无数据"
+        is_alert:
+          type: boolean
+          description: "progress < 0.8 时为 true"
+        manual_override:
+          type: boolean
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, achieved, failed, archived]
+        last_refreshed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    OgsmGoalCreate:
+      type: object
+      required: [objective_id, title, kpi_metric, target_value, unit, period_start, period_end]
+      properties:
+        objective_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        kpi_metric:
+          type: string
+        target_value:
+          type: number
+          not:
+            const: 0
+        baseline_value:
+          type: number
+        unit:
+          type: string
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        owner_role:
+          type: string
+
+    OgsmGoalUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        target_value:
+          type: number
+        baseline_value:
+          type: number
+        owner_role:
+          type: string
+        status:
+          type: string
+          enum: [active, achieved, failed, archived]
+
+    OgsmStrategy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        goal_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        owner_role:
+          type: string
+        execution_progress:
+          type: number
+          description: "关联 M 行动完成率，0.0 ~ 1.0"
+
+    OgsmStrategyCreate:
+      type: object
+      required: [goal_ids, title]
+      properties:
+        goal_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+        title:
+          type: string
+        description:
+          type: string
+        owner_role:
+          type: string
+
+    OgsmAction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        strategy_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        what:
+          type: string
+        who:
+          type: string
+          format: uuid
+        deadline:
+          type: string
+          format: date
+        expected_result:
+          type: string
+        actual_result:
+          type: string
+          nullable: true
+        kpi_impact:
+          type: object
+          nullable: true
+          properties:
+            kpi_metric:
+              type: string
+            expected_delta:
+              type: number
+        status:
+          type: string
+          enum: [pending, in_progress, done, overdue]
+        priority:
+          type: string
+          enum: [high, medium, low]
+        created_from:
+          type: string
+          enum: [manual, analysis, alert]
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    OgsmActionCreate:
+      type: object
+      required: [strategy_id, title, what, who, deadline, expected_result]
+      properties:
+        strategy_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        what:
+          type: string
+        who:
+          type: string
+          format: uuid
+        deadline:
+          type: string
+          format: date
+        expected_result:
+          type: string
+        kpi_impact:
+          type: object
+          properties:
+            kpi_metric:
+              type: string
+            expected_delta:
+              type: number
+        priority:
+          type: string
+          enum: [high, medium, low]
+          default: medium
